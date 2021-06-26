@@ -1,53 +1,48 @@
 const host = "p.eagate.573.jp";
 
-const diffs = [...Array(12).keys()]
+const levels = [...Array(12).keys()];
 
-const url = (diff, page) => {
-    return (
-        "https://" +
-        host + 
-        "/game/2dx/28/djdata/music/difficulty.html" +
-        "?difficult=" + diff +
-        "&style=0&disp=1" +
-        (page <= 1 ? "" : "&offset=" + (page-1) * 50)
-    );
-};
+const url = (level, page) => 
+    `https://${host}/game/2dx/28/djdata/music/difficulty.html?difficult=${level}&style=0&disp=1${page > 0 ? `&offset=${page*50}`:''}`
 
-const options = {
-    method: "GET",
-    headers: {
-        'Accept-Language': 'ko,ja',
-        'Content-Type': 'application/x-www-form-urlencoded'
-    }
-};
+const getDocumentObject = buffer => new DOMParser().parseFromString(new TextDecoder("shift-jis").decode(buffer), "text/html");
 
-diffs.forEach(async diff => {
-    let page = 1;
-    while(page != 0) {
-        await fetch(url(diff, page))
+const getData = (el, level) => {
+    const data = new Object();
+    const attr = el.querySelectorAll("td");
+    data.title = attr[0].innerText;
+    data.diff = attr[1].innerText;
+    data.level = level + 1;
+    data.rank = attr[2].querySelector("img")
+                    .getAttribute("src")
+                    .replace("/game/2dx/28/images/score_icon/", "")
+                    .replace(".gif", "");
+    [data.score, data.pgreat, data.great] = attr[3].innerText.split(/[()/]/).map(value => parseInt(value));
+    return data;
+}
+
+levels.forEach(async level => {
+    console.log(`start getting level ${level+1} data`);
+    let page = 0;
+    while (page >= 0) {
+        await fetch(url(level, page))
             .then(html => html.arrayBuffer())
-            .then(buffer => new TextDecoder("shift-jis").decode(buffer))
-            .then(text => {
-                const dom = new DOMParser().parseFromString(text, 'text/html');
-                if (dom.querySelector(".series-difficulty") === undefined) {
-                    page = 0;
-                } else {
-                    const chart = dom.querySelectorAll(".series-difficulty tr");
-                    chart.forEach((value, key) => {
+            .then(buffer => getDocumentObject(buffer))
+            .then(dom => {
+                const list = dom.querySelectorAll(".series-difficulty tr")
+                if (page >= 0) {
+                    list.forEach((value, key) => {
                         if (key > 1) {
-                            const el = value.querySelectorAll("td");
-                            const title = el[0].querySelector("a").innerHTML;
-                            console.log("title: " + title);
-                            console.log("score: " + el[3].innerHTML.split("<br>"));
-                            setTimeout(500);
+                            console.log(getData(value, level));
+                            page++;
                         }
-                    })
-                    page += 1;
-                }
-            })
-            .catch(err => {
-                console.log("err: " + err);
-                page = 0;
-            })
+                    });
+                } 
+                else {
+                    console.log(`no data at level ${level+1}`);
+                    page = -1;
+                } 
+            });
     }
+    console.log(`${level+1} finished`);
 });
